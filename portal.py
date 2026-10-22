@@ -154,8 +154,13 @@ def _getter(session):
 
 
 def fetch_day(user, password, day):
-    """Các buổi học của một ngày. None nếu ngày đó không nằm trong năm học đang hiện trên cổng."""
+    """(các buổi học, mọi lịch thi) cho tin nhắc ngày `day`, chung một lần đăng nhập.
+    Các buổi học là None nếu ngày đó không nằm trong năm học đang hiện trên cổng."""
     get = _getter(login(user, password))
+    return _day_sessions(get, day), parse_exams(get("/TraCuuLichThi/Index"))
+
+
+def _day_sessions(get, day):
     index = get("/TraCuuLichHoc/Index")
     week = current_week(index)
     if not week:

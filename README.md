@@ -6,7 +6,7 @@ Tự kiểm tra cổng thông tin sinh viên UTEHY mỗi 2 tiếng và báo cho 
 - **lịch thi mới** hoặc lịch thi bị đổi (ngày, giờ, phòng),
 - **lịch học tuần này hoặc tuần sau thay đổi** (đổi phòng, đổi tiết, nghỉ, học bù).
 
-Ngoài ra, **20h mỗi tối** nó nhắc lịch học ngày mai (giờ, phòng, môn) nếu mai có buổi học. Giờ của từng tiết điền trong `gio_hoc.py`, vì cổng trường chỉ ghi số tiết.
+Ngoài ra, **20h mỗi tối** nó nhắc lịch học ngày mai (giờ, phòng, môn) nếu mai có buổi học, và gửi riêng một tin "Mai thi: …" (giờ, môn, phòng, hình thức thi) nếu mai có môn thi. Giờ của từng tiết điền trong `gio_hoc.py`, vì cổng trường chỉ ghi số tiết.
 
 Thông báo hiện ở **góc màn hình Windows** (có số điểm) và trên **điện thoại qua app ntfy** (không ghi số điểm, chỉ ghi tên môn). Bấm vào thông báo sẽ mở cổng trường.
 
@@ -62,7 +62,7 @@ GitHub sẽ chạy script mỗi 2 tiếng trên máy chủ của họ, miễn ph
    - `UTEHY_PASS`: mật khẩu cổng trường
    - `NTFY_TOPIC`: tên kênh ntfy (giống trong `.env`)
 3. Vào tab **Actions → UTEHY Watch → Run workflow** để chạy thử ngay. Điện thoại sẽ nhận "UTEHY Watch đã bắt đầu theo dõi".
-4. Muốn thử tin nhắc lịch học: **Run workflow**, chọn mode **remind**. Nếu mai có buổi học, điện thoại nhận "Mai đi học: …"; nếu không có thì không gửi gì.
+4. Muốn thử tin nhắc lịch học: **Run workflow**, chọn mode **remind**. Nếu mai có buổi học, điện thoại nhận "Mai đi học: …"; nếu mai có thi thì nhận thêm "Mai thi: …"; không có gì thì không gửi.
 
 **Tránh nhận hai lần:** nếu máy tính cũng đang chạy theo lịch (`dat-lich.ps1`), điện thoại sẽ nhận mỗi tin hai lần. Hãy xoá giá trị `NTFY_TOPIC` trong `.env` trên máy (để trống sau dấu `=`). Khi đó máy tính chỉ hiện thông báo Windows có số điểm, còn điện thoại nhận từ GitHub. Hoặc chạy `huy-lich.ps1` để chỉ dùng GitHub.
 

@@ -124,7 +124,7 @@ def test_new_week_is_remembered_not_reported():
 from datetime import date  # noqa: E402
 
 from portal import week_ranges  # noqa: E402
-from reminder import build, time_range  # noqa: E402
+from reminder import build, build_exams, time_range  # noqa: E402
 
 WEEK_OPTIONS_HTML = """
 <select id="cmbTuanThu"><option value="-1">--- Chọn tuần ---</option>
@@ -161,3 +161,28 @@ def test_reminder_without_time_table_and_empty_day():
     assert body == "Tiết 4-6: Thể chất, phòng Sân"
     assert build([], date(2026, 10, 25), {}) is None
     assert time_range("1-3", {1: ("7:00", "7:50")}) == ""
+
+
+# Nhắc lịch thi ngày mai
+
+def test_exam_reminder_only_tomorrow_sorted_by_time():
+    exams = {
+        "A|lần 1": {"name": "Kinh tế", "date": "26/10/2026", "time": "13 giờ 00", "room": "ĐH512", "form": "Trắc nghiệm"},
+        "B|lần 1": {"name": "Toán", "date": "26/10/2026", "time": "7 giờ 30", "room": "A2-301", "form": ""},
+        "C|lần 1": {"name": "Lý", "date": "27/10/2026", "time": "7 giờ 30", "room": "A2-302", "form": ""},
+    }
+    title, body = build_exams(exams, date(2026, 10, 26))
+    assert title == "Mai thi: Thứ 2, 26/10"
+    assert body.splitlines() == [
+        "7 giờ 30: Toán, phòng A2-301",
+        "13 giờ 00: Kinh tế, phòng ĐH512 (Trắc nghiệm)",
+    ]
+
+
+def test_exam_reminder_reads_parsed_page_and_empty_day():
+    exams = parse_exams(EXAMS_HTML.format(date="5/1/2027", room="B1-201"))
+    title, body = build_exams(exams, date(2027, 1, 5))
+    assert title == "Mai thi: Thứ 3, 05/01"
+    assert body == "07:30: Lập trình Web, phòng B1-201 (Viết)"
+    assert build_exams(exams, date(2027, 1, 6)) is None
+    assert build_exams({}, date(2027, 1, 5)) is None
