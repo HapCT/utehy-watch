@@ -1,0 +1,44 @@
+name: UTEHY Watch
+
+on:
+  schedule:
+    - cron: "7 */2 * * *"  # mỗi 2 tiếng (giờ UTC; GitHub có thể chạy trễ vài phút)
+  workflow_dispatch:  # nút "Run workflow" để chạy thử bằng tay
+
+concurrency:
+  group: utehy-watch
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # state.json (lần đọc trước) được giữ trong cache của GitHub, không đưa vào code.
+      - uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+
+      - name: Kiểm tra cổng trường
+        continue-on-error: true  # mất mạng hay trang trường lỗi thì lần sau thử lại, không gửi email báo lỗi
+        env:
+          UTEHY_USER: ${{ secrets.UTEHY_USER }}
+          UTEHY_PASS: ${{ secrets.UTEHY_PASS }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python watch.py
+
+      - uses: actions/cache/save@v4
+        if: hashFiles('state.json') != ''
+        with:
+          path: state.json
+          key: state-${{ github.run_id }}
