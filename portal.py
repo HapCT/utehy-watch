@@ -1,4 +1,7 @@
 """Đăng nhập cổng thông tin sinh viên UTEHY và đọc điểm, lịch thi, lịch học theo tuần."""
+import re
+from datetime import date
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -78,17 +81,43 @@ def parse_exams(html):
     return exams
 
 
-def parse_week(html):
-    """Các buổi học trong một tuần, mỗi buổi là một dòng chữ, đã sắp xếp."""
-    sessions = set()
+def day_name(day):
+    """Trang trường ghi thứ bằng số: "2" là Thứ 2, "8" (hoặc "1", "CN") là Chủ nhật."""
+    day = day.strip()
+    if day.upper() in ("1", "8", "CN") or day.lower() == "chủ nhật":
+        return "Chủ nhật"
+    return f"Thứ {day}" if day.isdigit() else day
+
+
+def parse_week_sessions(html):
+    """Các buổi học trong một tuần: [{"day", "period", "name", "room", "teacher"}, ...]."""
+    sessions = []
     for table in BeautifulSoup(html, "html.parser").find_all("table"):
         for row in _data_rows(table, 6, required=(0, 3)):
-            day, period, _code, name, _klass, room = row[:6]
-            if day.isdigit():  # trang trường chỉ ghi số thứ
-                day = "Chủ nhật" if day in ("1", "8") else f"Thứ {day}"
-            teacher = row[6] if len(row) > 6 else ""
-            sessions.add(f"{day}, tiết {period}: {name}, phòng {room}" + (f", GV {teacher}" if teacher else ""))
-    return sorted(sessions)
+            sessions.append({
+                "day": day_name(row[0]), "period": row[1], "name": row[3], "room": row[5],
+                "teacher": row[6] if len(row) > 6 else "",
+            })
+    return sessions
+
+
+def parse_week(html):
+    """Các buổi học trong một tuần, mỗi buổi là một dòng chữ, đã sắp xếp (dùng để so sánh)."""
+    return sorted({
+        f"{s['day']}, tiết {s['period']}: {s['name']}, phòng {s['room']}" + (f", GV {s['teacher']}" if s["teacher"] else "")
+        for s in parse_week_sessions(html)
+    })
+
+
+def week_ranges(html):
+    """{tuần thứ: (ngày đầu, ngày cuối)} đọc từ danh sách tuần, ví dụ "Tuần 9 [Từ 19/10/2026 -- Đến 25/10/2026]"."""
+    ranges = {}
+    for option in BeautifulSoup(html, "html.parser").select("#cmbTuanThu option"):
+        found = re.findall(r"(\d{1,2})/(\d{1,2})/(\d{4})", option.get_text())
+        if option.get("value", "").isdigit() and len(found) == 2:
+            start, end = (date(int(y), int(m), int(d)) for d, m, y in found)
+            ranges[int(option["value"])] = (start, end)
+    return ranges
 
 
 def current_week(html):
@@ -116,14 +145,33 @@ def login(user, password):
     return session
 
 
-def fetch_all(user, password):
-    """Đăng nhập rồi đọc mọi thứ cần theo dõi."""
-    session = login(user, password)
-
+def _getter(session):
     def get(path):
         response = session.get(BASE + path, timeout=TIMEOUT)
         response.raise_for_status()
         return response.text
+    return get
+
+
+def fetch_day(user, password, day):
+    """Các buổi học của một ngày. None nếu ngày đó không nằm trong năm học đang hiện trên cổng."""
+    get = _getter(login(user, password))
+    index = get("/TraCuuLichHoc/Index")
+    week = current_week(index)
+    if not week:
+        return None
+    year = week[0]
+    for number, (start, end) in week_ranges(index).items():
+        if start <= day <= end:
+            sessions = parse_week_sessions(get(f"/TraCuuLichHoc/DanhSachTuan?Nam_hoc={year}&Tuan_thu={number}"))
+            wanted = day_name(str(day.isoweekday() + 1))  # thứ Hai -> "2", ..., Chủ nhật -> "8"
+            return [s for s in sessions if s["day"] == wanted]
+    return None
+
+
+def fetch_all(user, password):
+    """Đăng nhập rồi đọc mọi thứ cần theo dõi."""
+    get = _getter(login(user, password))
 
     snapshot = {
         "grades": parse_grades(get("/TraCuuDiem/Index")),

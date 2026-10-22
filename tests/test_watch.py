@@ -117,3 +117,47 @@ def test_new_week_is_remembered_not_reported():
     before = {**snapshot(), "weeks": {}}
     assert find_changes(before, snapshot()) == []
     assert "2026-2027 tuần 9" in merge_state(before, snapshot())["weeks"]
+
+
+# Nhắc lịch học ngày mai
+
+from datetime import date  # noqa: E402
+
+from portal import week_ranges  # noqa: E402
+from reminder import build, time_range  # noqa: E402
+
+WEEK_OPTIONS_HTML = """
+<select id="cmbTuanThu"><option value="-1">--- Chọn tuần ---</option>
+<option value="9" selected>Tuần 9 [Từ 19/10/2026 -- Đến 25/10/2026]</option>
+<option value="10">Tuần 10 [Từ 26/10/2026 -- Đến 01/11/2026]</option></select>
+"""
+
+
+def test_week_ranges():
+    assert week_ranges(WEEK_OPTIONS_HTML) == {
+        9: (date(2026, 10, 19), date(2026, 10, 25)),
+        10: (date(2026, 10, 26), date(2026, 11, 1)),
+    }
+
+
+def test_reminder_sorted_with_times():
+    sessions = [
+        {"day": "Thứ 5", "period": "7-9", "name": "Mạng máy tính", "room": "B2-102", "teacher": ""},
+        {"day": "Thứ 5", "period": "1-3", "name": "Lập trình Web", "room": "A2-301", "teacher": ""},
+    ]
+    table = {1: ("7:00", "7:50"), 3: ("8:55", "9:45"), 7: ("12:30", "13:20"), 9: ("14:25", "15:15")}
+    title, body = build(sessions, date(2026, 10, 22), table)
+    assert title == "Mai đi học: Thứ 5, 22/10"
+    assert body.splitlines() == [
+        "7:00–9:45 (tiết 1-3): Lập trình Web, phòng A2-301",
+        "12:30–15:15 (tiết 7-9): Mạng máy tính, phòng B2-102",
+    ]
+
+
+def test_reminder_without_time_table_and_empty_day():
+    sessions = [{"day": "Chủ nhật", "period": "4-6", "name": "Thể chất", "room": "Sân", "teacher": ""}]
+    title, body = build(sessions, date(2026, 10, 25), {})
+    assert title == "Mai đi học: Chủ nhật, 25/10"
+    assert body == "Tiết 4-6: Thể chất, phòng Sân"
+    assert build([], date(2026, 10, 25), {}) is None
+    assert time_range("1-3", {1: ("7:00", "7:50")}) == ""

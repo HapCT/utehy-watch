@@ -1,6 +1,7 @@
 """Kiểm tra cổng thông tin UTEHY và báo khi có điểm mới, lịch thi mới hoặc lịch học thay đổi.
 
 Chạy:  python watch.py               kiểm tra một lần
+       python watch.py --remind       nhắc lịch học ngày mai (nếu có)
        python watch.py --test-notify  gửi thử một thông báo lên máy tính và điện thoại
 """
 import argparse
@@ -13,8 +14,10 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+import gio_hoc
 import notify
 import portal
+import reminder
 from changes import find_changes, merge_state
 
 HERE = Path(__file__).resolve().parent
@@ -97,6 +100,27 @@ def check(user, password, topic):
     return 0
 
 
+def remind(user, password, topic):
+    """Nhắc lịch học ngày mai. Ngày mai không có buổi nào thì không gửi gì."""
+    day = reminder.tomorrow()
+    try:
+        sessions = portal.fetch_day(user, password, day)
+    except (portal.LoginError, requests.RequestException) as error:
+        say(f"Không lấy được lịch học ngày mai: {error}")
+        return 1
+    if sessions is None:
+        say(f"Không tìm thấy tuần chứa ngày {day:%d/%m/%Y} trên cổng trường.")
+        return 0
+    message = reminder.build(sessions, day, gio_hoc.TIET)
+    if message is None:
+        say(f"Ngày mai ({day:%d/%m}) không có lịch học.")
+        return 0
+    title, body = message
+    say(f"{title}\n{body}")
+    notify.send(topic, title, body, body, f"{portal.BASE}/TraCuuLichHoc/Index")
+    return 0
+
+
 def main():
     if sys.stdout and hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -107,6 +131,7 @@ def main():
     load_dotenv(HERE / ".env")
     parser = argparse.ArgumentParser(description="Theo dõi cổng thông tin sinh viên UTEHY")
     parser.add_argument("--test-notify", action="store_true", help="gửi thử một thông báo rồi thoát")
+    parser.add_argument("--remind", action="store_true", help="nhắc lịch học ngày mai thay vì kiểm tra thay đổi")
     args = parser.parse_args()
 
     topic = os.getenv("NTFY_TOPIC", "").strip()
@@ -121,6 +146,8 @@ def main():
     if not user or not password:
         say("Thiếu UTEHY_USER hoặc UTEHY_PASS. Mở file .env và điền mã sinh viên, mật khẩu (xem README.md).")
         return 1
+    if args.remind:
+        return remind(user, password, topic)
     return check(user, password, topic)
 
 
